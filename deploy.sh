@@ -187,7 +187,7 @@ launch_service() {
     echo "▄ 启动新RagFlow后端服务..."
     pushd "$RAGFLOW_HOME" >/dev/null
     source .venv/bin/activate
-    bash docker/launch_backend_service.sh
+    export PYTHONPATH=$(pwd); bash docker/launch_backend_service.sh
     popd >/dev/null
 }
 
@@ -210,12 +210,18 @@ else
 fi
 
 if ! $STOP_ONLY; then
-    modify_env
+    if ! $DEV_MODE; then
+        modify_env
+    fi
+
     if $MODIFY_DOC_ENGINE; then
         modify_doc_engine
     fi
+
     start_services
+    
     if $DEV_MODE; then
+        sleep  3
         launch_service
     fi
 else
