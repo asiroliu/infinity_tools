@@ -1,7 +1,7 @@
 #!/bin/bash
-#!/bin/bash
 set -euo pipefail
 
+local_mode=0
 use_lighten=0
 positional_args=()
 
@@ -22,7 +22,6 @@ done
 set -- "${positional_args[@]}"
 
 # 参数处理逻辑优化
-local_mode=0
 if [ $# -eq 0 ]; then
     # 本地模式参数
     local_mode=1
@@ -35,9 +34,9 @@ elif [ $# -ge 1 ] && [ $# -le 2 ]; then
     workspace="/home/infiniflow/workspace"
     target_dir="${workspace}/${tag}"
 else
-    echo "用法: $0 [-f] [<github_url> [tag]]" 
+    echo "用法: $0 [-l] [<github_url> [tag]]" 
     echo "示例:"
-    echo "  本地构建: $0 -f"
+    echo "  本地构建: $0 -l"
     echo "  远程构建: $0 https://github.com/user/repo/tree/dev 1.0"
     exit 1
 fi
