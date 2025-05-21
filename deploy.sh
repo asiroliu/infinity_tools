@@ -84,14 +84,24 @@ declare -r ENV_FILE="$COMPOSE_DIR/.env"
 declare -r TARGET_IMAGE="infiniflow/ragflow:${TARGET_TAG}"
 
 delete_containers() {
+    echo "▄ 停止并清理 Docker Compose 服务..."
+    if docker compose -f "${COMPOSE_DIR}/docker-compose.yml" down; then
+        echo "✅ Docker Compose 服务已停止并清理"
+    else
+        echo "❌ Docker Compose 服务停止失败" >&2
+        exit 2
+    fi
+
     echo "▄ 强制删除指定容器..."
     local containers=(
         "ragflow-server"
         "ragflow-es-01"
         "ragflow-infinity"
+        "ragflow-opensearch-01"
         "ragflow-minio"
         "ragflow-redis"
         "ragflow-mysql"
+        "ragflow-sandbox-executor-manager"
     )
 
     for container in "${containers[@]}"; do
@@ -112,6 +122,7 @@ delete_volumes() {
     local volumes=(
         "docker_esdata01"
         "docker_infinity_data"
+        "docker_osdata01"
         "docker_minio_data"
         "docker_mysql_data"
         "docker_redis_data"
@@ -228,7 +239,7 @@ else
     echo "▄ 跳过启动新服务..."
 fi
 
-restore_env
+# restore_env
 
 echo "✅ 所有操作已完成"
 
