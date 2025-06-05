@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE="/home/infiniflow/workspace"
+WORKSPACE="/home/infiniflow/workspace/python"
 HAS_TAG=false
 TARGET_TAG="nightly"
 RETAIN_VOLUME=false
@@ -153,14 +153,16 @@ modify_env() {
 }
 
 modify_doc_engine() {
-    echo "▄ 更新DOC_ENGINE配置..."
-    local target_line="DOC_ENGINE=\${DOC_ENGINE:-elasticsearch}"
-    local replacement="DOC_ENGINE=\${DOC_ENGINE:-infinity}"
+    local default_engine="elasticsearch"
+    if $MODIFY_DOC_ENGINE; then
+        default_engine="infinity"
+    fi
 
-    if sed -i "s#^${target_line}\$#${replacement}#" "$ENV_FILE"; then
-        echo "✅ DOC_ENGINE=infinity"
+    echo "▄ 设置 DOC_ENGINE 默认值为 DOC_ENGINE=$default_engine ..."
+    if sed -i "s/^DOC_ENGINE=.*/DOC_ENGINE=\${DOC_ENGINE:-${default_engine}}/" "$ENV_FILE"; then
+        echo "✅ DOC_ENGINE 配置已更新"
     else
-        echo "❌ DOC_ENGINE配置更新失败" >&2
+        echo "❌ DOC_ENGINE 配置更新失败" >&2
         exit 8
     fi
 }
@@ -225,14 +227,12 @@ if ! $STOP_ONLY; then
         modify_env
     fi
 
-    if $MODIFY_DOC_ENGINE; then
-        modify_doc_engine
-    fi
+    modify_doc_engine
 
     start_services
-    
+
     if $DEV_MODE; then
-        sleep  3
+        sleep 3
         launch_service
     fi
 else
