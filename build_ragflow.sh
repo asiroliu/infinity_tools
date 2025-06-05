@@ -3,6 +3,7 @@ set -euo pipefail
 
 local_mode=0
 use_lighten=0
+use_https=0
 positional_args=()
 
 # 使用循环处理带选项的参数
@@ -10,6 +11,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
     -l)
         use_lighten=1
+        shift
+        ;;
+    -h)
+        use_https=1
         shift
         ;;
     *)
@@ -25,19 +30,22 @@ set -- "${positional_args[@]}"
 if [ $# -eq 0 ]; then
     # 本地模式参数
     local_mode=1
-    target_dir="/home/infiniflow/workspace/ragflow"
+    target_dir="/home/infiniflow/workspace/python/ragflow"
     tag="main"
 elif [ $# -ge 1 ] && [ $# -le 2 ]; then
     # 远程仓库模式
     github_url="$1"
     tag="${2:-main}"
-    workspace="/home/infiniflow/workspace"
+    workspace="/home/infiniflow/workspace/python"
     target_dir="${workspace}/${tag}"
 else
-    echo "用法: $0 [-l] [<github_url> [tag]]" 
+    echo "用法: $0 [-l] [-h] [<github_url> [tag]]" 
+    echo "选项:"
+    echo "  -h  使用HTTPS克隆协议"
+    echo "  -l  构建精简版本"
     echo "示例:"
-    echo "  本地构建: $0 -l"
-    echo "  远程构建: $0 https://github.com/user/repo/tree/dev 1.0"
+    echo "  远程HTTPS构建: $0 -h https://github.com/user/repo/tree/dev 1.0"
+    echo "  远程SSH构建: $0 https://github.com/user/repo/tree/dev 1.0"
     exit 1
 fi
 
@@ -59,7 +67,11 @@ parse_github_url() {
     fi
 
     # 生成SSH克隆地址
-    clone_url="git@github.com:${repo_base#https://github.com/}.git"
+    if [ $use_https -eq 1 ]; then
+        clone_url="https://github.com/${repo_base#https://github.com/}.git"
+    else
+        clone_url="git@github.com:${repo_base#https://github.com/}.git"
+    fi
     echo "$branch $clone_url"
 }
 
