@@ -9,6 +9,7 @@ MODIFY_DOC_ENGINE=false
 STOP_ONLY=false
 QUIET_MODE=false
 DEV_MODE=false
+RESTORE_ENV=true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -41,8 +42,12 @@ while [[ $# -gt 0 ]]; do
         DEV_MODE=true
         shift
         ;;
+    -r)
+        RESTORE_ENV=false
+        shift
+        ;;
     -h | --help)
-        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-t TAG]"
+        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-t TAG]"
         echo "Options:"
         echo "  -i          修改DOC_ENGINE配置为infinity"
         echo "  -v          保留Docker volume数据"
@@ -50,11 +55,11 @@ while [[ $# -gt 0 ]]; do
         echo "  -t TAG      指定目标镜像标签"
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
-
+        echo "  -r          禁用恢复.env文件（默认会恢复）"
         exit 0
         ;;
     *)
-        echo "Usage: $0 [-i] [-v] [-s] [-q] [-t TAG]"
+        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-t TAG]"
         echo "Options:"
         echo "  -i          修改DOC_ENGINE配置为infinity"
         echo "  -v          保留Docker volume数据"
@@ -62,7 +67,7 @@ while [[ $# -gt 0 ]]; do
         echo "  -t TAG      指定目标镜像标签"
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
-
+        echo "  -r          禁用恢复.env文件（默认会恢复）"
         exit 0
         ;;
     esac
@@ -239,11 +244,15 @@ else
     echo "▄ 跳过启动新服务..."
 fi
 
-# restore_env
+if $RESTORE_ENV; then
+    restore_env
+else
+    echo "▄ 跳过恢复.env文件操作..."
+fi
 
 echo "✅ 所有操作已完成"
 
-if [[ "$DEV_MODE" != true && "$QUIET_MODE" == false && $STOP_ONLY != true ]]; then
+if ! $DEV_MODE && ! $QUIET_MODE && ! $STOP_ONLY; then
     echo "▄ 显示服务日志..."
     docker logs -f ragflow-server
 fi
