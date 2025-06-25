@@ -28,12 +28,14 @@ set -- "${positional_args[@]}"
 
 # 参数处理逻辑优化
 if [ $# -eq 0 ]; then
-    # 本地模式参数
     local_mode=1
     target_dir="/home/infiniflow/workspace/python/ragflow"
     tag="main"
-elif [ $# -ge 1 ] && [ $# -le 2 ]; then
-    # 远程仓库模式
+elif [ $# -eq 1 ]; then
+    local_mode=1
+    target_dir="/home/infiniflow/workspace/python/ragflow"
+    tag="$1"
+elif [ $# -ge 2 ]; then
     github_url="$1"
     tag="${2:-main}"
     workspace="/home/infiniflow/workspace/python"
@@ -44,6 +46,8 @@ else
     echo "  -h  使用HTTPS克隆协议"
     echo "  -l  构建精简版本"
     echo "示例:"
+    echo "  本地构建默认标签: $0"
+    echo "  本地构建指定标签: $0 1.0"
     echo "  远程HTTPS构建: $0 -h https://github.com/user/repo/tree/dev 1.0"
     echo "  远程SSH构建: $0 https://github.com/user/repo/tree/dev 1.0"
     exit 1
