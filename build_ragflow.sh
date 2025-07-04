@@ -4,9 +4,12 @@ set -euo pipefail
 local_mode=0
 use_lighten=0
 use_https=0
-positional_args=()
+workspace="/home/infiniflow/workspace/python"
+github_url=""
+tag="main"
+subdir="ragflow"
 
-# 使用循环处理带选项的参数
+# 参数处理
 while [[ $# -gt 0 ]]; do
     case "$1" in
     -l)
@@ -17,41 +20,60 @@ while [[ $# -gt 0 ]]; do
         use_https=1
         shift
         ;;
+    -t)
+        if [[ -z $2 ]]; then
+            echo "错误：-t 参数需要指定镜像tag"
+            exit 1
+        fi
+        tag="$2"
+        shift 2
+        ;;
+    -w)
+        if [[ -z $2 ]]; then
+            echo "错误：-w 参数需要指定子目录"
+            exit 1
+        fi
+        subdir="$2"
+        shift 2
+        ;;
+    -h | --help)
+        echo "用法: $0 [-l] [-h] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
+        echo "选项:"
+        echo "  -h        使用HTTPS克隆协议"
+        echo "  -l        构建精简版本"
+        echo "  -t TAG    指定构建标签（默认：main）"
+        echo "  -w SUBDIR 指定目标子目录（默认：ragflow）"
+        echo "示例:"
+        echo "  本地构建默认配置: $0"
+        echo "  本地构建指定标签和目录: $0 -t 1.0 -w mydir"
+        echo "  远程HTTPS构建: $0 -h -t 1.0 https://github.com/user/repo"
+        exit 0
+        ;;
     *)
-        positional_args+=("$1")
+        if [[ -z "$github_url" ]]; then
+            github_url="$1"
+        else
+            echo "错误：未知参数 $1"
+            exit 1
+        fi
         shift
         ;;
     esac
 done
 
-set -- "${positional_args[@]}"
-
-# 参数处理逻辑优化
-if [ $# -eq 0 ]; then
+# 目录处理
+if [[ -z "$github_url" ]]; then
     local_mode=1
-    target_dir="/home/infiniflow/workspace/python/ragflow"
-    tag="main"
-elif [ $# -eq 1 ]; then
-    local_mode=1
-    target_dir="/home/infiniflow/workspace/python/ragflow"
-    tag="$1"
-elif [ $# -ge 2 ]; then
-    github_url="$1"
-    tag="${2:-main}"
-    workspace="/home/infiniflow/workspace/python"
-    target_dir="${workspace}/${tag}"
+    target_dir="${workspace}/${subdir}"
 else
-    echo "用法: $0 [-l] [-h] [<github_url> [tag]]" 
-    echo "选项:"
-    echo "  -h  使用HTTPS克隆协议"
-    echo "  -l  构建精简版本"
-    echo "示例:"
-    echo "  本地构建默认标签: $0"
-    echo "  本地构建指定标签: $0 1.0"
-    echo "  远程HTTPS构建: $0 -h https://github.com/user/repo/tree/dev 1.0"
-    echo "  远程SSH构建: $0 https://github.com/user/repo/tree/dev 1.0"
-    exit 1
+    if [[ "$subdir" == "ragflow" ]]; then
+        target_dir="${workspace}/${tag}"
+    else
+        target_dir="${workspace}/${subdir}"
+    fi
 fi
+
+
 
 #######################################
 # GitHub仓库解析函数（支持HTTPS/SSH自动转换）
@@ -152,7 +174,21 @@ build_docker_image() {
     popd >/dev/null
 }
 
+print_variables() {
+    echo "===== 当前变量配置 ====="
+    echo "local_mode         = $local_mode"
+    echo "use_lighten        = $use_lighten" 
+    echo "use_https          = $use_https"
+    echo "workspace          = $workspace"
+    echo "github_url         = $github_url"
+    echo "tag                = $tag"
+    echo "subdir             = $subdir"
+    echo "target_dir         = $target_dir"
+    echo "========================="
+}
+
 main() {
+    print_variables
     if [ $local_mode -eq 1 ]; then
         # 本地构建模式
         echo "[本地模式] 使用目录: $target_dir"

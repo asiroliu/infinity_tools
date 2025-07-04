@@ -2,6 +2,7 @@
 set -euo pipefail
 
 WORKSPACE="/home/infiniflow/workspace/python"
+RAGFLOW_NAME="ragflow"
 HAS_TAG=false
 TARGET_TAG="nightly"
 RETAIN_VOLUME=false
@@ -20,6 +21,14 @@ while [[ $# -gt 0 ]]; do
         fi
         TARGET_TAG="$2"
         HAS_TAG=true
+        shift 2
+        ;;
+    -w)
+        if [[ -z $2 ]]; then
+            echo "错误：-w 参数需要指定工作目录名"
+            exit 1
+        fi
+        RAGFLOW_NAME="$2"
         shift 2
         ;;
     -v)
@@ -53,6 +62,7 @@ while [[ $# -gt 0 ]]; do
         echo "  -v          保留Docker volume数据"
         echo "  -s          删除容器并清理volume"
         echo "  -t TAG      指定目标镜像标签"
+        echo "  -w DIR      指定ragflow子目录名称（默认: ragflow）"
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
         echo "  -r          禁用恢复.env文件（默认会恢复）"
@@ -65,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         echo "  -v          保留Docker volume数据"
         echo "  -s          删除容器并清理volume"
         echo "  -t TAG      指定目标镜像标签"
+        echo "  -w DIR      指定ragflow子目录名称（默认: ragflow）"
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
         echo "  -r          禁用恢复.env文件（默认会恢复）"
@@ -77,16 +88,34 @@ if [[ "$HAS_TAG" == true ]]; then
     if [[ "$TARGET_TAG" =~ ^[0-9]+$ ]]; then
         RAGFLOW_HOME="${WORKSPACE}/${TARGET_TAG}"
     else
-        RAGFLOW_HOME="${WORKSPACE}/ragflow"
+        RAGFLOW_HOME="${WORKSPACE}/${RAGFLOW_NAME}"
     fi
 else
-    RAGFLOW_HOME="${WORKSPACE}/ragflow"
+    RAGFLOW_HOME="${WORKSPACE}/${RAGFLOW_NAME}"
 fi
 
 declare -r RAGFLOW_HOME
 declare -r COMPOSE_DIR="$RAGFLOW_HOME/docker"
 declare -r ENV_FILE="$COMPOSE_DIR/.env"
 declare -r TARGET_IMAGE="infiniflow/ragflow:${TARGET_TAG}"
+
+print_variables() {
+    echo "===== 当前变量配置 ====="
+    echo "TARGET_TAG        = $TARGET_TAG"
+    echo "HAS_TAG           = $HAS_TAG"
+    echo "RAGFLOW_NAME      = $RAGFLOW_NAME"
+    echo "RAGFLOW_HOME      = $RAGFLOW_HOME"
+    echo "COMPOSE_DIR       = $COMPOSE_DIR"
+    echo "ENV_FILE          = $ENV_FILE"
+    echo "TARGET_IMAGE      = $TARGET_IMAGE"
+    echo "RETAIN_VOLUME     = $RETAIN_VOLUME"
+    echo "MODIFY_DOC_ENGINE = $MODIFY_DOC_ENGINE"
+    echo "STOP_ONLY         = $STOP_ONLY"
+    echo "QUIET_MODE        = $QUIET_MODE"
+    echo "DEV_MODE          = $DEV_MODE"
+    echo "RESTORE_ENV       = $RESTORE_ENV"
+    echo "========================="
+}
 
 delete_containers() {
     echo "▄ 停止并清理 Docker Compose 服务..."
@@ -205,7 +234,8 @@ launch_service() {
     echo "▄ 启动新RagFlow后端服务..."
     pushd "$RAGFLOW_HOME" >/dev/null
     source .venv/bin/activate
-    export PYTHONPATH=$(pwd); bash docker/launch_backend_service.sh
+    export PYTHONPATH=$(pwd)
+    bash docker/launch_backend_service.sh
     popd >/dev/null
 }
 
@@ -219,40 +249,45 @@ restore_env() {
     fi
 }
 
-delete_containers
+main() {
+    print_variables
+    delete_containers
 
-if ! $RETAIN_VOLUME; then
-    delete_volumes
-else
-    echo "▄ 跳过清理VOLUME操作..."
-fi
-
-if ! $STOP_ONLY; then
-    if ! $DEV_MODE; then
-        modify_env
+    if ! $RETAIN_VOLUME; then
+        delete_volumes
+    else
+        echo "▄ 跳过清理VOLUME操作..."
     fi
 
-    modify_doc_engine
+    if ! $STOP_ONLY; then
+        if ! $DEV_MODE; then
+            modify_env
+        fi
 
-    start_services
+        modify_doc_engine
 
-    if $DEV_MODE; then
-        sleep 3
-        launch_service
+        start_services
+
+        if $DEV_MODE; then
+            sleep 3
+            launch_service
+        fi
+    else
+        echo "▄ 跳过启动新服务..."
     fi
-else
-    echo "▄ 跳过启动新服务..."
-fi
 
-if $RESTORE_ENV; then
-    restore_env
-else
-    echo "▄ 跳过恢复.env文件操作..."
-fi
+    if $RESTORE_ENV; then
+        restore_env
+    else
+        echo "▄ 跳过恢复.env文件操作..."
+    fi
 
-echo "✅ 所有操作已完成"
+    echo "✅ 所有操作已完成"
 
-if ! $DEV_MODE && ! $QUIET_MODE && ! $STOP_ONLY; then
-    echo "▄ 显示服务日志..."
-    docker logs -f ragflow-server
-fi
+    if ! $DEV_MODE && ! $QUIET_MODE && ! $STOP_ONLY; then
+        echo "▄ 显示服务日志..."
+        docker logs -f ragflow-server
+    fi
+}
+
+main
