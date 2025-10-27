@@ -89,7 +89,7 @@ if [[ "$HAS_TAG" == true ]]; then
         RAGFLOW_HOME="${WORKSPACE}/${TARGET_TAG}"
     else
         RAGFLOW_HOME="${WORKSPACE}/${RAGFLOW_NAME}"
-    fi
+	fi
 else
     RAGFLOW_HOME="${WORKSPACE}/${RAGFLOW_NAME}"
 fi
@@ -128,14 +128,14 @@ delete_containers() {
 
     echo "▄ 强制删除指定容器..."
     local containers=(
-        "ragflow-server"
-        "ragflow-es-01"
-        "ragflow-infinity"
-        "ragflow-opensearch-01"
-        "ragflow-minio"
-        "ragflow-redis"
-        "ragflow-mysql"
-        "ragflow-sandbox-executor-manager"
+        "docker-ragflow-cpu-1"
+        "docker-es01-1"
+        "docker-infinity-1"
+        "docker-opensearch-1"
+        "docker-minio-1"
+        "docker-redis-1"
+        "docker-mysql-1"
+        "docker-sandbox-executor-manager-1"
     )
 
     for container in "${containers[@]}"; do
@@ -286,7 +286,7 @@ main() {
 
     if ! $DEV_MODE && ! $QUIET_MODE && ! $STOP_ONLY; then
         echo "▄ 显示服务日志..."
-        docker logs -f ragflow-server
+        docker logs -f docker-ragflow-cpu-1
     fi
 }
 

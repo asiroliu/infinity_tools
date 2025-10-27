@@ -3,7 +3,7 @@ set -euo pipefail
 
 local_mode=0
 use_lighten=0
-use_https=0
+use_ssh=0
 workspace="/home/infiniflow/workspace/python"
 github_url=""
 tag="main"
@@ -16,8 +16,8 @@ while [[ $# -gt 0 ]]; do
         use_lighten=1
         shift
         ;;
-    -h)
-        use_https=1
+    -s)
+        use_ssh=1
         shift
         ;;
     -t)
@@ -37,16 +37,16 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     -h | --help)
-        echo "用法: $0 [-l] [-h] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
+        echo "用法: $0 [-l] [-s] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
         echo "选项:"
-        echo "  -h        使用HTTPS克隆协议"
+        echo "  -s        使用SSH克隆协议"
         echo "  -l        构建精简版本"
         echo "  -t TAG    指定构建标签（默认：main）"
         echo "  -w SUBDIR 指定目标子目录（默认：ragflow）"
         echo "示例:"
         echo "  本地构建默认配置: $0"
         echo "  本地构建指定标签和目录: $0 -t 1.0 -w mydir"
-        echo "  远程HTTPS构建: $0 -h -t 1.0 https://github.com/user/repo"
+        echo "  远程HTTPS构建: $0 -s -t 1.0 https://github.com/user/repo"
         exit 0
         ;;
     *)
@@ -93,7 +93,7 @@ parse_github_url() {
     fi
 
     # 生成SSH克隆地址
-    if [ $use_https -eq 1 ]; then
+    if [ $use_ssh -eq 0 ]; then
         clone_url="https://github.com/${repo_base#https://github.com/}.git"
     else
         clone_url="git@github.com:${repo_base#https://github.com/}.git"
@@ -178,7 +178,7 @@ print_variables() {
     echo "===== 当前变量配置 ====="
     echo "local_mode         = $local_mode"
     echo "use_lighten        = $use_lighten" 
-    echo "use_https          = $use_https"
+    echo "use_ssh            = $use_ssh"
     echo "workspace          = $workspace"
     echo "github_url         = $github_url"
     echo "tag                = $tag"
