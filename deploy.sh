@@ -11,6 +11,7 @@ STOP_ONLY=false
 QUIET_MODE=false
 DEV_MODE=false
 RESTORE_ENV=true
+DEPLOY_TEI=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -55,8 +56,12 @@ while [[ $# -gt 0 ]]; do
         RESTORE_ENV=false
         shift
         ;;
+    -e)
+        DEPLOY_TEI=true
+        shift
+        ;;
     -h | --help)
-        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-t TAG]"
+        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-e] [-t TAG]"
         echo "Options:"
         echo "  -i          修改DOC_ENGINE配置为infinity"
         echo "  -v          保留Docker volume数据"
@@ -66,10 +71,11 @@ while [[ $# -gt 0 ]]; do
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
         echo "  -r          禁用恢复.env文件（默认会恢复）"
+        echo "  -e          部署TEI容器"
         exit 0
         ;;
     *)
-        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-t TAG]"
+        echo "Usage: $0 [-i] [-v] [-s] [-q] [-d] [-r] [-e] [-t TAG]"
         echo "Options:"
         echo "  -i          修改DOC_ENGINE配置为infinity"
         echo "  -v          保留Docker volume数据"
@@ -79,6 +85,7 @@ while [[ $# -gt 0 ]]; do
         echo "  -q          静默模式，不显示服务日志"
         echo "  -d          使用源码方式启动"
         echo "  -r          禁用恢复.env文件（默认会恢复）"
+        echo "  -e          部署TEI容器"
         exit 0
         ;;
     esac
@@ -114,6 +121,7 @@ print_variables() {
     echo "QUIET_MODE        = $QUIET_MODE"
     echo "DEV_MODE          = $DEV_MODE"
     echo "RESTORE_ENV       = $RESTORE_ENV"
+    echo "DEPLOY_TEI        = $DEPLOY_TEI"
     echo "========================="
 }
 
@@ -135,6 +143,7 @@ delete_containers() {
         "docker-minio-1"
         "docker-redis-1"
         "docker-mysql-1"
+		"docker-tei-cpu-1"
         "docker-sandbox-executor-manager-1"
     )
 
@@ -198,6 +207,23 @@ modify_doc_engine() {
     else
         echo "❌ DOC_ENGINE 配置更新失败" >&2
         exit 8
+    fi
+}
+
+deploy_tei() {
+    echo "▄ 配置TEI容器部署..."
+    if sed -i 's#^TEI_MODEL=.*#TEI_MODEL=BAAI/bge-small-en-v1.5#g' "$ENV_FILE"; then
+        echo "✅ TEI_MODEL 配置已更新"
+    else
+        echo "❌ TEI_MODEL 配置更新失败" >&2
+        exit 9
+    fi
+
+    if sed -i 's#^\(COMPOSE_PROFILES=.*\)#\1,tei-cpu#g' "$ENV_FILE"; then
+        echo "✅ COMPOSE_PROFILES 配置已更新"
+    else
+        echo "❌ COMPOSE_PROFILES 配置更新失败" >&2
+        exit 10
     fi
 }
 
@@ -265,6 +291,10 @@ main() {
         fi
 
         modify_doc_engine
+
+        if $DEPLOY_TEI; then
+            deploy_tei
+        fi
 
         start_services
 
