@@ -2,7 +2,6 @@
 set -euo pipefail
 
 local_mode=0
-use_lighten=0
 use_ssh=0
 workspace="/home/infiniflow/workspace/python"
 github_url=""
@@ -12,10 +11,6 @@ subdir="ragflow"
 # 参数处理
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    -l)
-        use_lighten=1
-        shift
-        ;;
     -s)
         use_ssh=1
         shift
@@ -37,10 +32,9 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     -h | --help)
-        echo "用法: $0 [-l] [-s] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
+        echo "用法: $0 [-s] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
         echo "选项:"
         echo "  -s        使用SSH克隆协议"
-        echo "  -l        构建精简版本"
         echo "  -t TAG    指定构建标签（默认：main）"
         echo "  -w SUBDIR 指定目标子目录（默认：ragflow）"
         echo "示例:"
@@ -151,19 +145,10 @@ validate_local_repo() {
 build_docker_image() {
     local dir="$1" tag="$2"
 
-    local build_args=()
-    if [ $use_lighten -eq 1 ]; then
-        echo "▸ 构建slim版本..."
-        build_args+=(--build-arg LIGHTEN=1)
-    else
-        echo "▸ 构建full版本..."
-    fi
-
     echo "▸ 启动Docker构建..."
     pushd "$dir" >/dev/null
     DOCKER_BUILDKIT=1 docker build \
         --progress=plain \
-        "${build_args[@]}" \
         --build-arg NEED_MIRROR=1 \
         -f Dockerfile \
         -t "infiniflow/ragflow:$tag" \
@@ -177,7 +162,6 @@ build_docker_image() {
 print_variables() {
     echo "===== 当前变量配置 ====="
     echo "local_mode         = $local_mode"
-    echo "use_lighten        = $use_lighten" 
     echo "use_ssh            = $use_ssh"
     echo "workspace          = $workspace"
     echo "github_url         = $github_url"
