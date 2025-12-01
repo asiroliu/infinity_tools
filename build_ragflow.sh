@@ -7,6 +7,7 @@ workspace="/home/infiniflow/workspace/python"
 github_url=""
 tag="main"
 subdir="ragflow"
+proxy_suffix=""
 
 # 参数处理
 while [[ $# -gt 0 ]]; do
@@ -31,16 +32,29 @@ while [[ $# -gt 0 ]]; do
         subdir="$2"
         shift 2
         ;;
+    -p)
+        if [[ -z $2 ]]; then
+            echo "错误：-p 参数需要指定代理IP的最后一段数字"
+            exit 1
+        fi
+        if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+            echo "错误：-p 参数必须是数字"
+            exit 1
+        fi
+        proxy_suffix="$2"
+        shift 2
+        ;;
     -h | --help)
-        echo "用法: $0 [-s] [-t TAG] [-w SUBDIR] [GITHUB_URL]"
+        echo "用法: $0 [-s] [-t TAG] [-w SUBDIR] [-p IP_SUFFIX] [GITHUB_URL]"
         echo "选项:"
         echo "  -s        使用SSH克隆协议"
         echo "  -t TAG    指定构建标签（默认：main）"
         echo "  -w SUBDIR 指定目标子目录（默认：ragflow）"
+        echo "  -p IP_SUFFIX 指定代理IP的最后一段数字 (例如: 33)，将使用 192.168.1.IP_SUFFIX:7897 作为代理"
         echo "示例:"
         echo "  本地构建默认配置: $0"
         echo "  本地构建指定标签和目录: $0 -t 1.0 -w mydir"
-        echo "  远程HTTPS构建: $0 -s -t 1.0 https://github.com/user/repo"
+        echo "  远程HTTPS构建并使用代理 (IP 192.168.1.33): $0 -p 33 https://github.com/user/repo"
         exit 0
         ;;
     *)
@@ -140,16 +154,21 @@ validate_local_repo() {
 
 #######################################
 # Docker镜像构建
-# 参数: 代码目录 镜像标签
+# 参数: 代码目录 镜像标签 代理参数字符串
 #######################################
 build_docker_image() {
-    local dir="$1" tag="$2"
+    local dir="$1" tag="$2" proxy_build_args="$3"
 
     echo "▸ 启动Docker构建..."
     pushd "$dir" >/dev/null
+    
+    echo "完整构建命令:"
+    echo "DOCKER_BUILDKIT=1 docker build --progress=plain --build-arg NEED_MIRROR=1 ${proxy_build_args} -f Dockerfile -t \"infiniflow/ragflow:$tag\" ."
+    
     DOCKER_BUILDKIT=1 docker build \
         --progress=plain \
         --build-arg NEED_MIRROR=1 \
+        ${proxy_build_args} \
         -f Dockerfile \
         -t "infiniflow/ragflow:$tag" \
         . || {
@@ -168,11 +187,21 @@ print_variables() {
     echo "tag                = $tag"
     echo "subdir             = $subdir"
     echo "target_dir         = $target_dir"
+    echo "proxy_suffix       = ${proxy_suffix:-<未设置>}"
     echo "========================="
 }
 
 main() {
+    # 构造代理参数字符串
+    local proxy_args_string=""
+    if [[ -n "$proxy_suffix" ]]; then
+        local full_ip="192.168.1.${proxy_suffix}"
+        proxy_args_string="--build-arg http_proxy=http://${full_ip}:7897 --build-arg https_proxy=http://${full_ip}:7897 --build-arg all_proxy=socks5://${full_ip}:7897"
+        echo "[代理配置] IP后缀: ${proxy_suffix} | 完整IP: ${full_ip}"
+    fi
+    
     print_variables
+    
     if [ $local_mode -eq 1 ]; then
         # 本地构建模式
         echo "[本地模式] 使用目录: $target_dir"
@@ -190,7 +219,7 @@ main() {
     fi
 
     # Docker构建
-    build_docker_image "$target_dir" "$tag"
+    build_docker_image "$target_dir" "$tag" "$proxy_args_string"
 
     echo "✔ 构建完成! 镜像名称: infiniflow/ragflow:$tag"
 }
