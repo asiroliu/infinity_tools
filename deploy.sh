@@ -219,7 +219,7 @@ deploy_tei() {
         exit 9
     fi
 
-    if sed -i 's#^\(COMPOSE_PROFILES=.*\)#\1,tei-cpu#g' "$ENV_FILE"; then
+    if sed -i 's|^# COMPOSE_PROFILES=${COMPOSE_PROFILES},tei-cpu$|COMPOSE_PROFILES=${COMPOSE_PROFILES},tei-cpu|' "$ENV_FILE"; then
         echo "✅ COMPOSE_PROFILES 配置已更新"
     else
         echo "❌ COMPOSE_PROFILES 配置更新失败" >&2
