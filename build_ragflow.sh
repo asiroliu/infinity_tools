@@ -8,12 +8,23 @@ github_url=""
 tag="main"
 subdir="ragflow"
 proxy_suffix=""
+no_build=0
+build_go_server=0
+builder_container="ragflow_build"
 
 # 参数处理
 while [[ $# -gt 0 ]]; do
     case "$1" in
     -s)
         use_ssh=1
+        shift
+        ;;
+    -n)
+        no_build=1
+        shift
+        ;;
+    -g)
+        build_go_server=1
         shift
         ;;
     -t)
@@ -45,9 +56,11 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     -h | --help)
-        echo "用法: $0 [-s] [-t TAG] [-w SUBDIR] [-p IP_SUFFIX] [GITHUB_URL]"
+        echo "用法: $0 [-s] [-n] [-g] [-t TAG] [-w SUBDIR] [-p IP_SUFFIX] [GITHUB_URL]"
         echo "选项:"
         echo "  -s        使用SSH克隆协议"
+        echo "  -n        只clone或更新代码，不构建Docker镜像"
+        echo "  -g        构建Go server (需要先构建C++库)"
         echo "  -t TAG    指定构建标签（默认：main）"
         echo "  -w SUBDIR 指定目标子目录（默认：ragflow）"
         echo "  -p IP_SUFFIX 指定代理IP的最后一段数字 (例如: 33)，将使用 192.168.1.IP_SUFFIX:7897 作为代理"
@@ -55,6 +68,8 @@ while [[ $# -gt 0 ]]; do
         echo "  本地构建默认配置: $0"
         echo "  本地构建指定标签和目录: $0 -t 1.0 -w mydir"
         echo "  远程HTTPS构建并使用代理 (IP 192.168.1.33): $0 -p 33 https://github.com/user/repo"
+        echo "  只克隆/更新代码不构建: $0 -n https://github.com/user/repo"
+        echo "  构建Go server: $0 -g"
         exit 0
         ;;
     *)
@@ -140,16 +155,54 @@ update_repository() {
 #######################################
 validate_local_repo() {
     local dir="$1"
-    
+
     if [ ! -d "$dir" ]; then
         echo "✖ 本地代码目录不存在: $dir" >&2
         exit 1
     fi
-    
+
     if [ ! -f "$dir/Dockerfile" ]; then
         echo "✖ 目录中未找到Dockerfile" >&2
         exit 1
     fi
+}
+
+#######################################
+# 构建Go server (先构建C++库，再构建Go)
+# 参数: 代码目录
+#######################################
+build_go_server() {
+    local dir="$1"
+
+    echo "▸ 构建Go server..."
+
+    # 获取时区
+    TZ=${TZ:-$(readlink -f /etc/localtime | awk -F '/zoneinfo/' '{print $2}')}
+
+    # 启动builder容器构建C++
+    echo "▸ 启动builder容器构建C++库..."
+    docker run --privileged -d --name ${builder_container} \
+        -e TZ=${TZ} \
+        -e UV_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
+        -v "${dir}:/ragflow" \
+        -v "${dir}/internal/cpp/resource:/usr/share/infinity/resource" \
+        infiniflow/infinity_builder:ubuntu22_clang20
+
+    # 在容器内构建C++
+    echo "▸ 在容器内构建C++库..."
+    docker exec ${builder_container} bash -c "git config --global safe.directory \"*\" && cd /ragflow && ./build.sh --cpp"
+
+    # 在宿主机构建Go
+    echo "▸ 在宿主机构建Go server..."
+    pushd "$dir" >/dev/null
+    ./build.sh --go
+    popd >/dev/null
+
+    # 清理builder容器
+    echo "▸ 清理builder容器..."
+    docker rm -f ${builder_container}
+
+    echo "✔ Go server构建完成!"
 }
 
 #######################################
@@ -161,10 +214,10 @@ build_docker_image() {
 
     echo "▸ 启动Docker构建..."
     pushd "$dir" >/dev/null
-    
+
     echo "完整构建命令:"
     echo "DOCKER_BUILDKIT=1 docker build --progress=plain --build-arg NEED_MIRROR=1 ${proxy_build_args} -f Dockerfile -t \"infiniflow/ragflow:$tag\" ."
-    
+
     DOCKER_BUILDKIT=1 docker build \
         --progress=plain \
         --build-arg NEED_MIRROR=1 \
@@ -188,6 +241,8 @@ print_variables() {
     echo "subdir             = $subdir"
     echo "target_dir         = $target_dir"
     echo "proxy_suffix       = ${proxy_suffix:-<未设置>}"
+    echo "no_build           = $no_build"
+    echo "build_go_server    = $build_go_server"
     echo "========================="
 }
 
@@ -199,9 +254,9 @@ main() {
         proxy_args_string="--build-arg http_proxy=http://${full_ip}:7897 --build-arg https_proxy=http://${full_ip}:7897 --build-arg all_proxy=socks5://${full_ip}:7897"
         echo "[代理配置] IP后缀: ${proxy_suffix} | 完整IP: ${full_ip}"
     fi
-    
+
     print_variables
-    
+
     if [ $local_mode -eq 1 ]; then
         # 本地构建模式
         echo "[本地模式] 使用目录: $target_dir"
@@ -218,10 +273,22 @@ main() {
         update_repository "$target_dir" "$branch" "$clone_url"
     fi
 
-    # Docker构建
-    build_docker_image "$target_dir" "$tag" "$proxy_args_string"
+    # 构建Go server (受 -n 参数影响)
+    if [ $build_go_server -eq 1 ] && [ $no_build -eq 0 ]; then
+        build_go_server "$target_dir"
+    fi
 
-    echo "✔ 构建完成! 镜像名称: infiniflow/ragflow:$tag"
+    # Docker构建
+    if [ $no_build -eq 1 ]; then
+        if [ $build_go_server -eq 1 ]; then
+            echo "✔ 代码更新完成! 目标目录: $target_dir (跳过Go server和Docker镜像构建)"
+        else
+            echo "✔ 代码更新完成! 目标目录: $target_dir (跳过Docker镜像构建)"
+        fi
+    else
+        build_docker_image "$target_dir" "$tag" "$proxy_args_string"
+        echo "✔ 构建完成! 镜像名称: infiniflow/ragflow:$tag"
+    fi
 }
 
 main
